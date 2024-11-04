@@ -22,9 +22,8 @@ namespace fuzz {
 
 TransformationToggleAccessChainInstruction::
     TransformationToggleAccessChainInstruction(
-        const spvtools::fuzz::protobufs::
-            TransformationToggleAccessChainInstruction& message)
-    : message_(message) {}
+        protobufs::TransformationToggleAccessChainInstruction message)
+    : message_(std::move(message)) {}
 
 TransformationToggleAccessChainInstruction::
     TransformationToggleAccessChainInstruction(
@@ -33,22 +32,22 @@ TransformationToggleAccessChainInstruction::
 }
 
 bool TransformationToggleAccessChainInstruction::IsApplicable(
-    opt::IRContext* context, const spvtools::fuzz::FactManager& /*unused*/
-    ) const {
+    opt::IRContext* ir_context, const TransformationContext& /*unused*/) const {
   auto instruction =
-      FindInstruction(message_.instruction_descriptor(), context);
+      FindInstruction(message_.instruction_descriptor(), ir_context);
   if (instruction == nullptr) {
     return false;
   }
 
-  SpvOp opcode = static_cast<SpvOp>(
+  spv::Op opcode = static_cast<spv::Op>(
       message_.instruction_descriptor().target_instruction_opcode());
 
   assert(instruction->opcode() == opcode &&
          "The located instruction must have the same opcode as in the "
          "descriptor.");
 
-  if (opcode == SpvOpAccessChain || opcode == SpvOpInBoundsAccessChain) {
+  if (opcode == spv::Op::OpAccessChain ||
+      opcode == spv::Op::OpInBoundsAccessChain) {
     return true;
   }
 
@@ -56,19 +55,18 @@ bool TransformationToggleAccessChainInstruction::IsApplicable(
 }
 
 void TransformationToggleAccessChainInstruction::Apply(
-    opt::IRContext* context, spvtools::fuzz::FactManager* /*unused*/
-    ) const {
+    opt::IRContext* ir_context, TransformationContext* /*unused*/) const {
   auto instruction =
-      FindInstruction(message_.instruction_descriptor(), context);
-  SpvOp opcode = instruction->opcode();
+      FindInstruction(message_.instruction_descriptor(), ir_context);
+  spv::Op opcode = instruction->opcode();
 
-  if (opcode == SpvOpAccessChain) {
-    instruction->SetOpcode(SpvOpInBoundsAccessChain);
+  if (opcode == spv::Op::OpAccessChain) {
+    instruction->SetOpcode(spv::Op::OpInBoundsAccessChain);
   } else {
-    assert(opcode == SpvOpInBoundsAccessChain &&
+    assert(opcode == spv::Op::OpInBoundsAccessChain &&
            "The located instruction must be an OpInBoundsAccessChain "
            "instruction.");
-    instruction->SetOpcode(SpvOpAccessChain);
+    instruction->SetOpcode(spv::Op::OpAccessChain);
   }
 }
 
@@ -77,6 +75,11 @@ TransformationToggleAccessChainInstruction::ToMessage() const {
   protobufs::Transformation result;
   *result.mutable_toggle_access_chain_instruction() = message_;
   return result;
+}
+
+std::unordered_set<uint32_t>
+TransformationToggleAccessChainInstruction::GetFreshIds() const {
+  return std::unordered_set<uint32_t>();
 }
 
 }  // namespace fuzz

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-add_library(SPIRV-Tools-link
+add_library(SPIRV-Tools-link ${SPIRV_TOOLS_LIBRARY_TYPE}
   linker.cpp
 )
 
@@ -23,7 +23,7 @@ target_include_directories(SPIRV-Tools-link
 	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE ${spirv-tools_BINARY_DIR}
 )
-# We need the IR functionnalities from the optimizer
+# We need the IR functionalities from the optimizer
 target_link_libraries(SPIRV-Tools-link
   PUBLIC SPIRV-Tools-opt)
 
@@ -31,10 +31,7 @@ set_property(TARGET SPIRV-Tools-link PROPERTY FOLDER "SPIRV-Tools libraries")
 spvtools_check_symbol_exports(SPIRV-Tools-link)
 
 if(ENABLE_SPIRV_TOOLS_INSTALL)
-  install(TARGETS SPIRV-Tools-link EXPORT SPIRV-Tools-linkTargets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(TARGETS SPIRV-Tools-link EXPORT SPIRV-Tools-linkTargets)
   export(EXPORT SPIRV-Tools-linkTargets FILE SPIRV-Tools-linkTargets.cmake)
 
   spvtools_config_package_dir(SPIRV-Tools-link PACKAGE_DIR)

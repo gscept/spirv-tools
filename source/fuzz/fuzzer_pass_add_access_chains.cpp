@@ -21,12 +21,12 @@ namespace spvtools {
 namespace fuzz {
 
 FuzzerPassAddAccessChains::FuzzerPassAddAccessChains(
-    opt::IRContext* ir_context, FactManager* fact_manager,
+    opt::IRContext* ir_context, TransformationContext* transformation_context,
     FuzzerContext* fuzzer_context,
-    protobufs::TransformationSequence* transformations)
-    : FuzzerPass(ir_context, fact_manager, fuzzer_context, transformations) {}
-
-FuzzerPassAddAccessChains::~FuzzerPassAddAccessChains() = default;
+    protobufs::TransformationSequence* transformations,
+    bool ignore_inapplicable_transformations)
+    : FuzzerPass(ir_context, transformation_context, fuzzer_context,
+                 transformations, ignore_inapplicable_transformations) {}
 
 void FuzzerPassAddAccessChains::Apply() {
   ForEachInstructionWithInstructionDescriptor(
@@ -34,15 +34,16 @@ void FuzzerPassAddAccessChains::Apply() {
              opt::BasicBlock::iterator inst_it,
              const protobufs::InstructionDescriptor& instruction_descriptor)
           -> void {
-        assert(inst_it->opcode() ==
-                   instruction_descriptor.target_instruction_opcode() &&
-               "The opcode of the instruction we might insert before must be "
-               "the same as the opcode in the descriptor for the instruction");
+        assert(
+            inst_it->opcode() ==
+                spv::Op(instruction_descriptor.target_instruction_opcode()) &&
+            "The opcode of the instruction we might insert before must be "
+            "the same as the opcode in the descriptor for the instruction");
 
         // Check whether it is legitimate to insert an access chain
         // instruction before this instruction.
-        if (!fuzzerutil::CanInsertOpcodeBeforeInstruction(SpvOpAccessChain,
-                                                          inst_it)) {
+        if (!fuzzerutil::CanInsertOpcodeBeforeInstruction(
+                spv::Op::OpAccessChain, inst_it)) {
           return;
         }
 
@@ -64,8 +65,8 @@ void FuzzerPassAddAccessChains::Apply() {
                     return false;
                   }
                   switch (instruction->opcode()) {
-                    case SpvOpConstantNull:
-                    case SpvOpUndef:
+                    case spv::Op::OpConstantNull:
+                    case spv::Op::OpUndef:
                       // Do not allow making an access chain from a null or
                       // undefined pointer.  (We can eliminate these cases
                       // before actually checking that the instruction is a
@@ -78,7 +79,7 @@ void FuzzerPassAddAccessChains::Apply() {
                   // make an access chain from it.
                   return context->get_def_use_mgr()
                              ->GetDef(instruction->type_id())
-                             ->opcode() == SpvOpTypePointer;
+                             ->opcode() == spv::Op::OpTypePointer;
                 });
 
         // At this point, |relevant_instructions| contains all the pointers
@@ -91,6 +92,11 @@ void FuzzerPassAddAccessChains::Apply() {
             relevant_pointer_instructions[GetFuzzerContext()->RandomIndex(
                 relevant_pointer_instructions)];
         std::vector<uint32_t> index_ids;
+
+        // Each index accessing a non-struct composite will be clamped, thus
+        // needing a pair of fresh ids
+        std::vector<std::pair<uint32_t, uint32_t>> fresh_ids_for_clamping;
+
         auto pointer_type = GetIRContext()->get_def_use_mgr()->GetDef(
             chosen_pointer->type_id());
         uint32_t subobject_type_id = pointer_type->GetSingleWordInOperand(1);
@@ -107,14 +113,14 @@ void FuzzerPassAddAccessChains::Apply() {
           }
           uint32_t bound;
           switch (subobject_type->opcode()) {
-            case SpvOpTypeArray:
+            case spv::Op::OpTypeArray:
               bound = fuzzerutil::GetArraySize(*subobject_type, GetIRContext());
               break;
-            case SpvOpTypeMatrix:
-            case SpvOpTypeVector:
+            case spv::Op::OpTypeMatrix:
+            case spv::Op::OpTypeVector:
               bound = subobject_type->GetSingleWordInOperand(1);
               break;
-            case SpvOpTypeStruct:
+            case spv::Op::OpTypeStruct:
               bound = fuzzerutil::GetNumberOfStructMembers(*subobject_type);
               break;
             default:
@@ -131,20 +137,37 @@ void FuzzerPassAddAccessChains::Apply() {
             break;
           }
 
-          // TODO(https://github.com/KhronosGroup/SPIRV-Tools/issues/3179) We
-          //  could allow non-constant indices when looking up non-structs,
-          //  using clamping to ensure they are in-bounds.
           uint32_t index_value =
               GetFuzzerContext()->GetRandomIndexForAccessChain(bound);
-          index_ids.push_back(FindOrCreate32BitIntegerConstant(
-              index_value, GetFuzzerContext()->ChooseEven()));
+
           switch (subobject_type->opcode()) {
-            case SpvOpTypeArray:
-            case SpvOpTypeMatrix:
-            case SpvOpTypeVector:
+            case spv::Op::OpTypeArray:
+            case spv::Op::OpTypeMatrix:
+            case spv::Op::OpTypeVector: {
+              // The index will be clamped
+
+              bool is_signed = GetFuzzerContext()->ChooseEven();
+
+              // Make the constant ready for clamping. We need:
+              // - an OpTypeBool to be present in the module
+              // - an OpConstant with the same type as the index and value
+              //   the maximum value for an index
+              // - a new pair of fresh ids for the clamping instructions
+              FindOrCreateBoolType();
+              FindOrCreateIntegerConstant({bound - 1}, 32, is_signed, false);
+              std::pair<uint32_t, uint32_t> fresh_pair_of_ids = {
+                  GetFuzzerContext()->GetFreshId(),
+                  GetFuzzerContext()->GetFreshId()};
+              fresh_ids_for_clamping.emplace_back(fresh_pair_of_ids);
+
+              index_ids.push_back(FindOrCreateIntegerConstant(
+                  {index_value}, 32, is_signed, false));
               subobject_type_id = subobject_type->GetSingleWordInOperand(0);
-              break;
-            case SpvOpTypeStruct:
+
+            } break;
+            case spv::Op::OpTypeStruct:
+              index_ids.push_back(FindOrCreateIntegerConstant(
+                  {index_value}, 32, GetFuzzerContext()->ChooseEven(), false));
               subobject_type_id =
                   subobject_type->GetSingleWordInOperand(index_value);
               break;
@@ -156,12 +179,12 @@ void FuzzerPassAddAccessChains::Apply() {
         // pointer suitable for the access chain's result type exists, so we
         // create one if it does not.
         FindOrCreatePointerType(subobject_type_id,
-                                static_cast<SpvStorageClass>(
+                                static_cast<spv::StorageClass>(
                                     pointer_type->GetSingleWordInOperand(0)));
         // Apply the transformation to add an access chain.
         ApplyTransformation(TransformationAccessChain(
             GetFuzzerContext()->GetFreshId(), chosen_pointer->result_id(),
-            index_ids, instruction_descriptor));
+            index_ids, instruction_descriptor, fresh_ids_for_clamping));
       });
 }
 
