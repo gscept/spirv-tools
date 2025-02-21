@@ -24,20 +24,22 @@ CC=clang
 CXX=clang++
 SRC=$PWD/github/SPIRV-Tools
 
-cd $SRC
-git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers external/spirv-headers
-git clone --depth=1 https://github.com/google/googletest          external/googletest
-git clone --depth=1 https://github.com/google/effcee              external/effcee
-git clone --depth=1 https://github.com/google/re2                 external/re2
+# This is required to run any git command in the docker since owner will
+# have changed between the clone environment, and the docker container.
+# Marking the root of the repo as safe for ownership changes.
+git config --global --add safe.directory $SRC
 
-# Get bazel 0.29.1.
-gsutil cp gs://bazel/0.29.1/release/bazel-0.29.1-darwin-x86_64 .
-chmod +x bazel-0.29.1-darwin-x86_64
+cd $SRC
+/usr/bin/python3 utils/git-sync-deps --treeless
+
+# Get bazel 7.0.2
+gsutil cp gs://bazel/7.0.2/release/bazel-7.0.2-darwin-x86_64 .
+chmod +x bazel-7.0.2-darwin-x86_64
 
 echo $(date): Build everything...
-./bazel-0.29.1-darwin-x86_64 build :all
+./bazel-7.0.2-darwin-x86_64 build --cxxopt=-std=c++17 :all
 echo $(date): Build completed.
 
 echo $(date): Starting bazel test...
-./bazel-0.29.1-darwin-x86_64 test :all
+./bazel-7.0.2-darwin-x86_64 test --cxxopt=-std=c++17 :all
 echo $(date): Bazel test completed.

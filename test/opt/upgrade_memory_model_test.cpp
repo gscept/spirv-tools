@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "assembly_builder.h"
-#include "gmock/gmock.h"
 #include "pass_fixture.h"
 #include "pass_utils.h"
 
@@ -404,7 +403,7 @@ OpCapability VariablePointers
 OpExtension "SPV_KHR_variable_pointers"
 OpMemoryModel Logical GLSL450
 OpDecorate %param Coherent
-OpDecorate %param ArrayStride 4
+OpDecorate %ptr_int_StorageBuffer ArrayStride 4
 %void = OpTypeVoid
 %bool = OpTypeBool
 %int = OpTypeInt 32 0

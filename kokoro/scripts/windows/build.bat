@@ -21,35 +21,23 @@ set SRC=%cd%\github\SPIRV-Tools
 set BUILD_TYPE=%1
 set VS_VERSION=%2
 
-:: Force usage of python 3.6
-set PATH=C:\python36;%PATH%
-
-cd %SRC%
-git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers external/spirv-headers
-git clone --depth=1 https://github.com/google/googletest          external/googletest
-git clone --depth=1 https://github.com/google/effcee              external/effcee
-git clone --depth=1 https://github.com/google/re2                 external/re2
-git clone --depth=1 https://github.com/protocolbuffers/protobuf   external/protobuf
-pushd external\protobuf
-git fetch --all --tags --prune
-git checkout v3.7.1
-popd
+:: Force usage of python 3.12, cmake 3.31.2
+set PATH=C:\python312;c:\cmake-3.31.2\bin;%PATH%
 
 :: #########################################
 :: set up msvc build env
 :: #########################################
-if %VS_VERSION% == 2017 (
-  call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
-  echo "Using VS 2017..."
-) else if %VS_VERSION% == 2015 (
-  call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x64
-  echo "Using VS 2015..."
-) else if %VS_VERSION% == 2013 (
-  call "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x64
-  echo "Using VS 2013..."
+if %VS_VERSION% == 2019 (
+  call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
+  echo "Using VS 2019..."
+) else if %VS_VERSION% == 2022 (
+  call "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" x64
+  echo "Using VS 2022..."
 )
 
 cd %SRC%
+python utils/git-sync-deps --treeless
+
 mkdir build
 cd build
 
@@ -65,16 +53,14 @@ if "%KOKORO_GITHUB_COMMIT%." == "." (
 
 set CMAKE_FLAGS=-DCMAKE_INSTALL_PREFIX=%KOKORO_ARTIFACTS_DIR%\install -GNinja -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DRE2_BUILD_TESTING=OFF -DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe
 
-:: Skip building tests for VS2013
-if %VS_VERSION% == 2013 (
-  set CMAKE_FLAGS=%CMAKE_FLAGS% -DSPIRV_SKIP_TESTS=ON
-)
+:: Build spirv-fuzz
+set CMAKE_FLAGS=%CMAKE_FLAGS% -DSPIRV_BUILD_FUZZER=ON
 
-:: Skip building spirv-fuzz for VS2013; it relies on protobufs which VS2013 cannot handle.
-if %VS_VERSION% NEQ 2013 (
-  set CMAKE_FLAGS=%CMAKE_FLAGS% -DSPIRV_BUILD_FUZZER=ON
-)
+if "%BUILD_TESTS%" == "NO" (
+  set CMAKE_FLAGS=-DSPIRV_SKIP_TESTS=ON %CMAKE_FLAGS%
+) 
 
+cmake --version
 cmake %CMAKE_FLAGS% ..
 
 if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
@@ -88,14 +74,14 @@ echo "Build Completed %DATE% %TIME%"
 setlocal ENABLEDELAYEDEXPANSION
 
 :: ################################################
-:: Run the tests (We no longer run tests on VS2013)
+:: Run the tests
 :: ################################################
-echo "Running Tests... %DATE% %TIME%"
-if %VS_VERSION% NEQ 2013 (
+if "%BUILD_TESTS%" NEQ "NO" (
+  echo "Running Tests... %DATE% %TIME%"
   ctest -C %BUILD_TYPE% --output-on-failure --timeout 300
   if !ERRORLEVEL! NEQ 0 exit /b !ERRORLEVEL!
+  echo "Tests Completed %DATE% %TIME%"
 )
-echo "Tests Completed %DATE% %TIME%"
 
 :: ################################################
 :: Install and package.
@@ -109,4 +95,3 @@ rm -rf %SRC%\build
 rm -rf %SRC%\external
 
 exit /b 0
-

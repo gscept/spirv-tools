@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <sstream>
 #include <string>
 #include <tuple>
 
 #include "gmock/gmock.h"
-#include "test/test_fixture.h"
 #include "test/unit_spirv.h"
 #include "test/val/val_fixtures.h"
 
@@ -181,13 +179,14 @@ TEST_P(ValidateFunctionCall, VariableNoVariablePointers) {
   } else {
     EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
     if (storage_class == "StorageBuffer") {
-      EXPECT_THAT(getDiagnosticString(),
-                  HasSubstr("StorageBuffer pointer operand 1[%var] requires a "
-                            "variable pointers capability"));
+      EXPECT_THAT(
+          getDiagnosticString(),
+          HasSubstr("StorageBuffer pointer operand '1[%var]' requires a "
+                    "variable pointers capability"));
     } else {
       EXPECT_THAT(
           getDiagnosticString(),
-          HasSubstr("Invalid storage class for pointer operand 1[%var]"));
+          HasSubstr("Invalid storage class for pointer operand '1[%var]'"));
     }
   }
 }
@@ -211,8 +210,9 @@ TEST_P(ValidateFunctionCall, VariableVariablePointersStorageClass) {
     EXPECT_EQ(SPV_SUCCESS, ValidateInstructions());
   } else {
     EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
-    EXPECT_THAT(getDiagnosticString(),
-                HasSubstr("Invalid storage class for pointer operand 1[%var]"));
+    EXPECT_THAT(
+        getDiagnosticString(),
+        HasSubstr("Invalid storage class for pointer operand '1[%var]'"));
   }
 }
 
@@ -235,8 +235,9 @@ TEST_P(ValidateFunctionCall, VariableVariablePointers) {
     EXPECT_EQ(SPV_SUCCESS, ValidateInstructions());
   } else {
     EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
-    EXPECT_THAT(getDiagnosticString(),
-                HasSubstr("Invalid storage class for pointer operand 1[%var]"));
+    EXPECT_THAT(
+        getDiagnosticString(),
+        HasSubstr("Invalid storage class for pointer operand '1[%var]'"));
   }
 }
 
@@ -258,11 +259,12 @@ TEST_P(ValidateFunctionCall, ParameterNoVariablePointers) {
     EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
     if (storage_class == "StorageBuffer") {
       EXPECT_THAT(getDiagnosticString(),
-                  HasSubstr("StorageBuffer pointer operand 1[%p] requires a "
+                  HasSubstr("StorageBuffer pointer operand '1[%p]' requires a "
                             "variable pointers capability"));
     } else {
-      EXPECT_THAT(getDiagnosticString(),
-                  HasSubstr("Invalid storage class for pointer operand 1[%p]"));
+      EXPECT_THAT(
+          getDiagnosticString(),
+          HasSubstr("Invalid storage class for pointer operand '1[%p]'"));
     }
   }
 }
@@ -287,7 +289,7 @@ TEST_P(ValidateFunctionCall, ParameterVariablePointersStorageBuffer) {
   } else {
     EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
     EXPECT_THAT(getDiagnosticString(),
-                HasSubstr("Invalid storage class for pointer operand 1[%p]"));
+                HasSubstr("Invalid storage class for pointer operand '1[%p]'"));
   }
 }
 
@@ -311,7 +313,7 @@ TEST_P(ValidateFunctionCall, ParameterVariablePointers) {
   } else {
     EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
     EXPECT_THAT(getDiagnosticString(),
-                HasSubstr("Invalid storage class for pointer operand 1[%p]"));
+                HasSubstr("Invalid storage class for pointer operand '1[%p]'"));
   }
 }
 
@@ -334,16 +336,17 @@ TEST_P(ValidateFunctionCall, NonMemoryObjectDeclarationNoVariablePointers) {
     EXPECT_THAT(
         getDiagnosticString(),
         HasSubstr(
-            "Pointer operand 2[%gep] must be a memory object declaration"));
+            "Pointer operand '2[%gep]' must be a memory object declaration"));
   } else {
     if (storage_class == "StorageBuffer") {
-      EXPECT_THAT(getDiagnosticString(),
-                  HasSubstr("StorageBuffer pointer operand 2[%gep] requires a "
-                            "variable pointers capability"));
+      EXPECT_THAT(
+          getDiagnosticString(),
+          HasSubstr("StorageBuffer pointer operand '2[%gep]' requires a "
+                    "variable pointers capability"));
     } else if (storage_class != "UniformConstant") {
       EXPECT_THAT(
           getDiagnosticString(),
-          HasSubstr("Invalid storage class for pointer operand 2[%gep]"));
+          HasSubstr("Invalid storage class for pointer operand '2[%gep]'"));
     }
   }
 }
@@ -373,11 +376,11 @@ TEST_P(ValidateFunctionCall,
       EXPECT_THAT(
           getDiagnosticString(),
           HasSubstr(
-              "Pointer operand 2[%gep] must be a memory object declaration"));
+              "Pointer operand '2[%gep]' must be a memory object declaration"));
     } else {
       EXPECT_THAT(
           getDiagnosticString(),
-          HasSubstr("Invalid storage class for pointer operand 2[%gep]"));
+          HasSubstr("Invalid storage class for pointer operand '2[%gep]'"));
     }
   }
 }
@@ -407,11 +410,11 @@ TEST_P(ValidateFunctionCall, NonMemoryObjectDeclarationVariablePointers) {
       EXPECT_THAT(
           getDiagnosticString(),
           HasSubstr(
-              "Pointer operand 2[%gep] must be a memory object declaration"));
+              "Pointer operand '2[%gep]' must be a memory object declaration"));
     } else {
       EXPECT_THAT(
           getDiagnosticString(),
-          HasSubstr("Invalid storage class for pointer operand 2[%gep]"));
+          HasSubstr("Invalid storage class for pointer operand '2[%gep]'"));
     }
   }
 }
@@ -831,6 +834,113 @@ TEST_F(ValidateFunctionCall, LogicallyMismatchedPointersArraySize) {
   EXPECT_THAT(getDiagnosticString(), HasSubstr("OpFunctionCall Argument <id>"));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("type does not match Function <id>"));
+}
+
+TEST_F(ValidateFunctionCall, UntypedPointerParameterMismatch) {
+  const std::string spirv = R"(
+OpCapability Shader
+OpCapability UntypedPointersKHR
+OpExtension "SPV_KHR_untyped_pointers"
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpName %var "var"
+OpName %ptr2 "ptr2"
+%void = OpTypeVoid
+%int = OpTypeInt 32 0
+%ptr = OpTypeUntypedPointerKHR Private
+%ptr2 = OpTypeUntypedPointerKHR Private
+%var = OpUntypedVariableKHR %ptr Private %int
+%void_fn = OpTypeFunction %void
+%ptr_fn = OpTypeFunction %void %ptr2
+%foo = OpFunction %void None %ptr_fn
+%param = OpFunctionParameter %ptr2
+%first = OpLabel
+OpReturn
+OpFunctionEnd
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+%call = OpFunctionCall %void %foo %var
+OpReturn
+OpFunctionEnd
+)";
+
+  CompileSuccessfully(spirv);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("OpFunctionCall Argument <id> '2[%var]'s type does not "
+                        "match Function <id> '3[%ptr2]'s parameter type"));
+}
+
+TEST_F(ValidateFunctionCall, UntypedPointerParameterGood) {
+  const std::string spirv = R"(
+OpCapability Shader
+OpCapability UntypedPointersKHR
+OpExtension "SPV_KHR_untyped_pointers"
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpName %var "var"
+%void = OpTypeVoid
+%int = OpTypeInt 32 0
+%ptr = OpTypeUntypedPointerKHR Private
+%var = OpUntypedVariableKHR %ptr Private %int
+%void_fn = OpTypeFunction %void
+%ptr_fn = OpTypeFunction %void %ptr
+%foo = OpFunction %void None %ptr_fn
+%param = OpFunctionParameter %ptr
+%first = OpLabel
+OpReturn
+OpFunctionEnd
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+%call = OpFunctionCall %void %foo %var
+OpReturn
+OpFunctionEnd
+)";
+
+  CompileSuccessfully(spirv);
+  EXPECT_EQ(SPV_SUCCESS, ValidateInstructions());
+}
+
+TEST_F(ValidateFunctionCall,
+       UntypedPointerParameterNotMemoryObjectDeclaration) {
+  const std::string spirv = R"(
+OpCapability Shader
+OpCapability UntypedPointersKHR
+OpExtension "SPV_KHR_untyped_pointers"
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpName %var "var"
+OpName %gep "gep"
+%void = OpTypeVoid
+%int = OpTypeInt 32 0
+%int_0 = OpConstant %int 0
+%struct = OpTypeStruct %int
+%ptr = OpTypeUntypedPointerKHR Private
+%var = OpUntypedVariableKHR %ptr Private %int
+%void_fn = OpTypeFunction %void
+%ptr_fn = OpTypeFunction %void %ptr
+%foo = OpFunction %void None %ptr_fn
+%param = OpFunctionParameter %ptr
+%first = OpLabel
+OpReturn
+OpFunctionEnd
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+%gep = OpUntypedAccessChainKHR %ptr %struct %var %int_0
+%call = OpFunctionCall %void %foo %gep
+OpReturn
+OpFunctionEnd
+)";
+
+  CompileSuccessfully(spirv);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions());
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "Pointer operand '3[%gep]' must be a memory object declaration"));
 }
 
 INSTANTIATE_TEST_SUITE_P(StorageClass, ValidateFunctionCall,

@@ -1,4 +1,6 @@
 // Copyright (c) 2017 Google Inc.
+// Modifications Copyright (C) 2024 Advanced Micro Devices, Inc. All rights
+// reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,7 +92,7 @@ OpFunctionEnd
 
 // Returns expected error string if |opcode| produces a duplicate type
 // declaration.
-std::string GetErrorString(SpvOp opcode) {
+std::string GetErrorString(spv::Op opcode) {
   return "Duplicate non-aggregate type declarations are not allowed. Opcode: " +
          std::string(spvOpcodeString(opcode));
 }
@@ -107,7 +109,8 @@ TEST_F(ValidateTypeUnique, duplicate_void) {
 )" + GetBody();
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(), HasSubstr(GetErrorString(SpvOpTypeVoid)));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr(GetErrorString(spv::Op::OpTypeVoid)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_bool) {
@@ -116,7 +119,8 @@ TEST_F(ValidateTypeUnique, duplicate_bool) {
 )" + GetBody();
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(), HasSubstr(GetErrorString(SpvOpTypeBool)));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr(GetErrorString(spv::Op::OpTypeBool)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_int) {
@@ -125,7 +129,8 @@ TEST_F(ValidateTypeUnique, duplicate_int) {
 )" + GetBody();
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(), HasSubstr(GetErrorString(SpvOpTypeInt)));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr(GetErrorString(spv::Op::OpTypeInt)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_float) {
@@ -134,7 +139,8 @@ TEST_F(ValidateTypeUnique, duplicate_float) {
 )" + GetBody();
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions());
-  EXPECT_THAT(getDiagnosticString(), HasSubstr(GetErrorString(SpvOpTypeFloat)));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr(GetErrorString(spv::Op::OpTypeFloat)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_vec3) {
@@ -144,7 +150,7 @@ TEST_F(ValidateTypeUnique, duplicate_vec3) {
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr(GetErrorString(SpvOpTypeVector)));
+              HasSubstr(GetErrorString(spv::Op::OpTypeVector)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_mat33) {
@@ -154,7 +160,7 @@ TEST_F(ValidateTypeUnique, duplicate_mat33) {
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr(GetErrorString(SpvOpTypeMatrix)));
+              HasSubstr(GetErrorString(spv::Op::OpTypeMatrix)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_vfunc) {
@@ -164,7 +170,7 @@ TEST_F(ValidateTypeUnique, duplicate_vfunc) {
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr(GetErrorString(SpvOpTypeFunction)));
+              HasSubstr(GetErrorString(spv::Op::OpTypeFunction)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_pipe_storage) {
@@ -181,7 +187,7 @@ OpMemoryModel Physical32 OpenCL
   CompileSuccessfully(str.c_str(), SPV_ENV_UNIVERSAL_1_1);
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions(SPV_ENV_UNIVERSAL_1_1));
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr(GetErrorString(SpvOpTypePipeStorage)));
+              HasSubstr(GetErrorString(spv::Op::OpTypePipeStorage)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_named_barrier) {
@@ -197,7 +203,7 @@ OpMemoryModel Physical32 OpenCL
   CompileSuccessfully(str.c_str(), SPV_ENV_UNIVERSAL_1_1);
   ASSERT_EQ(kDuplicateTypeError, ValidateInstructions(SPV_ENV_UNIVERSAL_1_1));
   EXPECT_THAT(getDiagnosticString(),
-              HasSubstr(GetErrorString(SpvOpTypeNamedBarrier)));
+              HasSubstr(GetErrorString(spv::Op::OpTypeNamedBarrier)));
 }
 
 TEST_F(ValidateTypeUnique, duplicate_forward_pointer) {
@@ -234,7 +240,7 @@ OpMemoryModel Physical32 OpenCL
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(SPV_SUCCESS, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              Not(HasSubstr(GetErrorString(SpvOpTypeVoid))));
+              Not(HasSubstr(GetErrorString(spv::Op::OpTypeVoid))));
 }
 
 TEST_F(ValidateTypeUnique, DuplicatePointerTypesNoExtension) {
@@ -263,7 +269,47 @@ OpMemoryModel Logical GLSL450
   CompileSuccessfully(str.c_str());
   ASSERT_EQ(SPV_SUCCESS, ValidateInstructions());
   EXPECT_THAT(getDiagnosticString(),
-              Not(HasSubstr(GetErrorString(SpvOpTypePointer))));
+              Not(HasSubstr(GetErrorString(spv::Op::OpTypePointer))));
+}
+
+TEST_F(ValidateTypeUnique, DuplicateUntypedPointer) {
+  std::string str = R"(
+OpCapability Shader
+OpCapability Linkage
+OpCapability UntypedPointersKHR
+OpCapability WorkgroupMemoryExplicitLayoutKHR
+OpExtension "SPV_KHR_workgroup_memory_explicit_layout"
+OpExtension "SPV_KHR_untyped_pointers"
+OpMemoryModel Logical GLSL450
+%u32 = OpTypeInt 32 0
+%ptr1 = OpTypeUntypedPointerKHR Workgroup
+%ptr2 = OpTypeUntypedPointerKHR Workgroup
+)";
+
+  CompileSuccessfully(str.c_str(), SPV_ENV_UNIVERSAL_1_4);
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_UNIVERSAL_1_4));
+}
+
+TEST_F(ValidateTypeUnique, DuplicateNodePayloadArrayType) {
+  std::string str = R"(
+OpCapability Shader
+OpCapability ShaderEnqueueAMDX
+OpCapability Linkage
+OpExtension "SPV_AMDX_shader_enqueue"
+OpMemoryModel Logical GLSL450
+%floatt = OpTypeFloat 32
+%struct = OpTypeStruct %floatt
+%npat1 = OpTypeNodePayloadArrayAMDX %struct
+%npat2 = OpTypeNodePayloadArrayAMDX %struct
+%void = OpTypeVoid
+%void_fn = OpTypeFunction %void
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+OpReturn
+OpFunctionEnd
+)";
+  CompileSuccessfully(str.c_str(), SPV_ENV_UNIVERSAL_1_4);
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_UNIVERSAL_1_4));
 }
 
 }  // namespace

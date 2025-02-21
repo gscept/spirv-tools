@@ -16,7 +16,6 @@
 
 #include <sstream>
 #include <string>
-#include <utility>
 
 #include "gmock/gmock.h"
 #include "test/unit_spirv.h"
@@ -212,6 +211,7 @@ TEST_F(ValidateLimits, SwitchNumBranchesGood) {
 %5 = OpFunction %1 None %2
 %7 = OpLabel
 %8 = OpIAdd %3 %4 %4
+     OpSelectionMerge %10 None
      OpSwitch %4 %10)";
 
   // Now add the (literal, label) pairs
@@ -240,6 +240,7 @@ TEST_F(ValidateLimits, SwitchNumBranchesBad) {
 %5 = OpFunction %1 None %2
 %7 = OpLabel
 %8 = OpIAdd %3 %4 %4
+     OpSelectionMerge %10 None
      OpSwitch %4 %10)";
 
   // Now add the (literal, label) pairs
@@ -271,6 +272,7 @@ TEST_F(ValidateLimits, CustomizedSwitchNumBranchesGood) {
 %5 = OpFunction %1 None %2
 %7 = OpLabel
 %8 = OpIAdd %3 %4 %4
+     OpSelectionMerge %10 None
      OpSwitch %4 %10)";
 
   // Now add the (literal, label) pairs
@@ -301,6 +303,7 @@ TEST_F(ValidateLimits, CustomizedSwitchNumBranchesBad) {
 %5 = OpFunction %1 None %2
 %7 = OpLabel
 %8 = OpIAdd %3 %4 %4
+     OpSelectionMerge %10 None
      OpSwitch %4 %10)";
 
   // Now add the (literal, label) pairs
@@ -746,7 +749,7 @@ TEST_F(ValidateLimits, CustomizedControlFlowDepthBad) {
 }
 
 // Valid. The purpose here is to test the CFG depth calculation code when a loop
-// continue target is the loop iteself. It also exercises the case where a loop
+// continue target is the loop itself. It also exercises the case where a loop
 // is unreachable.
 TEST_F(ValidateLimits, ControlFlowNoEntryToLoopGood) {
   std::string str = header + R"(

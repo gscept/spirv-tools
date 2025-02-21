@@ -455,13 +455,14 @@ spv_result_t ValidateImageOperands(ValidationState_t& _,
     }
 
     if (!_.options()->before_hlsl_legalization &&
-        spvIsVulkanEnv(_.context()->target_env)) {
+        spvIsVulkanEnv(_.context()->target_env) &&
+        !_.options()->allow_offset_texture_operand) {
       if (opcode != spv::Op::OpImageGather &&
           opcode != spv::Op::OpImageDrefGather &&
           opcode != spv::Op::OpImageSparseGather &&
           opcode != spv::Op::OpImageSparseDrefGather) {
         return _.diag(SPV_ERROR_INVALID_DATA, inst)
-               << _.VkErrorID(4663)
+               << _.VkErrorID(10213)
                << "Image Operand Offset can only be used with "
                   "OpImage*Gather operations";
       }
@@ -994,6 +995,7 @@ bool IsAllowedSampledImageOperand(spv::Op opcode, ValidationState_t& _) {
     case spv::Op::OpImageBlockMatchWindowSSDQCOM:
     case spv::Op::OpImageBlockMatchGatherSADQCOM:
     case spv::Op::OpImageBlockMatchGatherSSDQCOM:
+    case spv::Op::OpImageSampleFootprintNV:
       return true;
     case spv::Op::OpStore:
       if (_.HasCapability(spv::Capability::BindlessTextureNV)) return true;
@@ -1134,15 +1136,15 @@ spv_result_t ValidateImageTexelPointer(ValidationState_t& _,
                                        const Instruction* inst) {
   const auto result_type = _.FindDef(inst->type_id());
   if (result_type->opcode() != spv::Op::OpTypePointer &&
-      result_type->opcode() == spv::Op::OpTypeUntypedPointerKHR) {
+      result_type->opcode() != spv::Op::OpTypeUntypedPointerKHR) {
     return _.diag(SPV_ERROR_INVALID_DATA, inst)
-           << "Expected Result Type to be OpTypePointer";
+           << "Expected Result Type to be a pointer";
   }
 
   const auto storage_class = result_type->GetOperandAs<spv::StorageClass>(1);
   if (storage_class != spv::StorageClass::Image) {
     return _.diag(SPV_ERROR_INVALID_DATA, inst)
-           << "Expected Result Type to be OpTypePointer whose Storage Class "
+           << "Expected Result Type to be a pointer whose Storage Class "
               "operand is Image";
   }
 
@@ -1157,7 +1159,7 @@ spv_result_t ValidateImageTexelPointer(ValidationState_t& _,
           _.HasCapability(spv::Capability::AtomicFloat16VectorNV) &&
           _.IsFloat16Vector2Or4Type(ptr_type))) {
       return _.diag(SPV_ERROR_INVALID_DATA, inst)
-             << "Expected Result Type to be OpTypePointer whose Type operand "
+             << "Expected Result Type to be a pointer whose Type operand "
                 "must be a scalar numerical type or OpTypeVoid";
     }
   }

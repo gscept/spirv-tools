@@ -170,6 +170,72 @@ OpFunctionEnd
                                             after_predefs + after, true, true);
 }
 
+TEST_F(DeadInsertElimTest, DeadInsertForLinkage) {
+  const std::string before =
+      R"(OpCapability Shader
+OpCapability Linkage
+OpMemoryModel Logical GLSL450
+OpSource HLSL 630
+OpName %main "main"
+OpName %BaseColor "BaseColor"
+OpName %bb_entry "bb.entry"
+OpName %v "v"
+OpDecorate %main LinkageAttributes "main" Export
+%int = OpTypeInt 32 1
+%int_1 = OpConstant %int 1
+%uint = OpTypeInt 32 0
+%uint_0 = OpConstant %uint 0
+%int_0 = OpConstant %int 0
+%float = OpTypeFloat 32
+%float_0 = OpConstant %float 0
+%v2float = OpTypeVector %float 2
+%_ptr_Function_v2float = OpTypePointer Function %v2float
+%14 = OpTypeFunction %v2float %_ptr_Function_v2float
+%_ptr_Function_float = OpTypePointer Function %float
+%main = OpFunction %v2float None %14
+%BaseColor = OpFunctionParameter %_ptr_Function_v2float
+%bb_entry = OpLabel
+%v = OpVariable %_ptr_Function_v2float Function
+%16 = OpLoad %v2float %v
+%17 = OpAccessChain %_ptr_Function_float %BaseColor %int_1
+%18 = OpLoad %float %17
+%19 = OpCompositeInsert %v2float %18 %16 0
+%20 = OpCompositeInsert %v2float %float_0 %19 0
+OpReturnValue %20
+OpFunctionEnd
+)";
+  const std::string after =
+      R"(OpCapability Shader
+OpCapability Linkage
+OpMemoryModel Logical GLSL450
+OpSource HLSL 630
+OpName %main "main"
+OpName %BaseColor "BaseColor"
+OpName %bb_entry "bb.entry"
+OpName %v "v"
+OpDecorate %main LinkageAttributes "main" Export
+%int = OpTypeInt 32 1
+%uint = OpTypeInt 32 0
+%uint_0 = OpConstant %uint 0
+%int_0 = OpConstant %int 0
+%float = OpTypeFloat 32
+%float_0 = OpConstant %float 0
+%v2float = OpTypeVector %float 2
+%_ptr_Function_v2float = OpTypePointer Function %v2float
+%14 = OpTypeFunction %v2float %_ptr_Function_v2float
+%_ptr_Function_float = OpTypePointer Function %float
+%main = OpFunction %v2float None %14
+%BaseColor = OpFunctionParameter %_ptr_Function_v2float
+%bb_entry = OpLabel
+%v = OpVariable %_ptr_Function_v2float Function
+%16 = OpLoad %v2float %v
+%20 = OpCompositeInsert %v2float %float_0 %16 0
+OpReturnValue %20
+OpFunctionEnd
+)";
+  SinglePassRunAndCheck<DeadInsertElimPass>(before, after, true, true);
+}
+
 TEST_F(DeadInsertElimTest, DeadInsertInChainWithPhi) {
   // Dead insert eliminated with phi in insertion chain.
   //
@@ -561,6 +627,220 @@ OpFunctionEnd
 
   SinglePassRunAndCheck<DeadInsertElimPass>(before_predefs + before,
                                             after_predefs + after, true, true);
+}
+
+TEST_F(DeadInsertElimTest, DebugInsertAfterInsertElim) {
+  // With two insertions to the same offset, the first is dead.
+  //
+  // Note: The SPIR-V assembly has had store/load elimination
+  // performed to allow the inserts and extracts to directly
+  // reference each other.
+  //
+  // #version 450
+  //
+  // layout (location=0) in float In0;
+  // layout (location=1) in float In1;
+  // layout (location=2) in vec2 In2;
+  // layout (location=0) out vec4 OutColor;
+  //
+  // void main()
+  // {
+  //     vec2 v = In2;
+  //     v.x = In0 + In1; // dead
+  //     v.x = 0.0;
+  //     OutColor = v.xyxy;
+  // }
+
+  const std::string text =
+      R"(OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+%ext = OpExtInstImport "OpenCL.DebugInfo.100"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %In2 %In0 %In1 %OutColor
+OpExecutionMode %main OriginUpperLeft
+OpSource GLSL 450
+%file_name = OpString "test"
+%float_name = OpString "float"
+%main_name = OpString "main"
+%f_name = OpString "f"
+OpName %main "main"
+OpName %In2 "In2"
+OpName %In0 "In0"
+OpName %In1 "In1"
+OpName %OutColor "OutColor"
+OpName %_Globals_ "_Globals_"
+OpMemberName %_Globals_ 0 "g_b"
+OpMemberName %_Globals_ 1 "g_n"
+OpName %_ ""
+OpDecorate %In2 Location 2
+OpDecorate %In0 Location 0
+OpDecorate %In1 Location 1
+OpDecorate %OutColor Location 0
+OpMemberDecorate %_Globals_ 0 Offset 0
+OpMemberDecorate %_Globals_ 1 Offset 4
+OpDecorate %_Globals_ Block
+OpDecorate %_ DescriptorSet 0
+OpDecorate %_ Binding 0
+%void = OpTypeVoid
+%11 = OpTypeFunction %void
+%float = OpTypeFloat 32
+%v2float = OpTypeVector %float 2
+%_ptr_Function_v2float = OpTypePointer Function %v2float
+%_ptr_Input_v2float = OpTypePointer Input %v2float
+%In2 = OpVariable %_ptr_Input_v2float Input
+%_ptr_Input_float = OpTypePointer Input %float
+%In0 = OpVariable %_ptr_Input_float Input
+%In1 = OpVariable %_ptr_Input_float Input
+%uint = OpTypeInt 32 0
+%uint_32 = OpConstant %uint 32
+%_ptr_Function_float = OpTypePointer Function %float
+%float_0 = OpConstant %float 0
+%v4float = OpTypeVector %float 4
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+%OutColor = OpVariable %_ptr_Output_v4float Output
+%int = OpTypeInt 32 1
+%_Globals_ = OpTypeStruct %uint %int
+%_ptr_Uniform__Globals_ = OpTypePointer Uniform %_Globals_
+%_ = OpVariable %_ptr_Uniform__Globals_ Uniform
+
+%nullexpr = OpExtInst %void %ext DebugExpression
+%src = OpExtInst %void %ext DebugSource %file_name
+%cu = OpExtInst %void %ext DebugCompilationUnit 1 4 %src HLSL
+%dbg_tf = OpExtInst %void %ext DebugTypeBasic %float_name %uint_32 Float
+%dbg_v2f = OpExtInst %void %ext DebugTypeVector %dbg_tf 2
+%main_ty = OpExtInst %void %ext DebugTypeFunction FlagIsProtected|FlagIsPrivate %void
+%dbg_main = OpExtInst %void %ext DebugFunction %main_name %main_ty %src 0 0 %cu %main_name FlagIsProtected|FlagIsPrivate 0 %main
+%dbg_foo = OpExtInst %void %ext DebugLocalVariable %f_name %dbg_v2f %src 0 0 %dbg_main FlagIsLocal
+
+%main = OpFunction %void None %11
+%25 = OpLabel
+%26 = OpLoad %v2float %In2
+%27 = OpLoad %float %In0
+%28 = OpLoad %float %In1
+%29 = OpFAdd %float %27 %28
+
+; CHECK:      [[repl:%\w+]] = OpLoad %v2float %In2
+; CHECK-NOT:  OpCompositeInsert
+; CHECK:      DebugValue {{%\w+}} [[repl:%\w+]]
+; CHECK-NEXT: OpCompositeInsert %v2float %float_0 [[repl]] 0
+%35 = OpCompositeInsert %v2float %29 %26 0
+%value = OpExtInst %void %ext DebugValue %dbg_foo %35 %nullexpr
+%37 = OpCompositeInsert %v2float %float_0 %35 0
+
+%33 = OpVectorShuffle %v4float %37 %37 0 1 0 1
+OpStore %OutColor %33
+OpReturn
+OpFunctionEnd
+)";
+
+  SinglePassRunAndMatch<DeadInsertElimPass>(text, true);
+}
+
+TEST_F(DeadInsertElimTest, PhiOverEmptyStruct) {
+  // Reproducer for nullptr access error in MarkInsertChain
+  // that occurs when processing a phi operation with an
+  // empty struct result type.
+  //
+  // Note: Disassembly created from HLSL source with
+  // dxc -T cs_6_6 -spirv -Oconfig=
+  //  --eliminate-dead-branches,--merge-return,--ssa-rewrite
+  //
+  // RWBuffer<float> buf;
+  //
+  // struct S { };
+  //
+  // S fn() {
+  //     S s = (S)0;
+  //     if (buf[0] > 0) {
+  //         return s;
+  //     }
+  //     return s;
+  // }
+  //
+  // [numthreads(1,1,1)]
+  // void main() {
+  //     fn();
+  // }
+
+  const std::string disassembly =
+      R"(OpCapability Shader
+               OpCapability SampledBuffer
+               OpCapability ImageBuffer
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource HLSL 660
+               OpName %S "S"
+               OpName %type_buffer_image "type.buffer.image"
+               OpName %buf "buf"
+               OpName %main "main"
+               OpName %src_main "src.main"
+               OpName %bb_entry "bb.entry"
+               OpName %fn "fn"
+               OpName %bb_entry_0 "bb.entry"
+               OpName %s "s"
+               OpName %if_true "if.true"
+               OpName %if_merge "if.merge"
+               OpDecorate %buf DescriptorSet 0
+               OpDecorate %buf Binding 0
+          %S = OpTypeStruct
+          %4 = OpConstantNull %S
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+      %float = OpTypeFloat 32
+    %float_0 = OpConstant %float 0
+%type_buffer_image = OpTypeImage %float Buffer 2 0 0 2 R32f
+%_ptr_UniformConstant_type_buffer_image = OpTypePointer UniformConstant %type_buffer_image
+       %void = OpTypeVoid
+         %12 = OpTypeFunction %void
+         %19 = OpTypeFunction %S
+%_ptr_Function_S = OpTypePointer Function %S
+    %v4float = OpTypeVector %float 4
+       %bool = OpTypeBool
+        %buf = OpVariable %_ptr_UniformConstant_type_buffer_image UniformConstant
+      %false = OpConstantFalse %bool
+%_ptr_Function_bool = OpTypePointer Function %bool
+       %true = OpConstantTrue %bool
+       %main = OpFunction %void None %12
+         %13 = OpLabel
+         %14 = OpFunctionCall %void %src_main
+               OpReturn
+               OpFunctionEnd
+   %src_main = OpFunction %void None %12
+   %bb_entry = OpLabel
+         %17 = OpFunctionCall %S %fn
+               OpReturn
+               OpFunctionEnd
+         %fn = OpFunction %S None %19
+ %bb_entry_0 = OpLabel
+         %39 = OpVariable %_ptr_Function_bool Function %false
+         %34 = OpVariable %_ptr_Function_S Function
+          %s = OpVariable %_ptr_Function_S Function
+               OpSelectionMerge %33 None
+               OpSwitch %uint_0 %36
+         %36 = OpLabel
+               OpStore %s %4
+         %23 = OpLoad %type_buffer_image %buf
+         %25 = OpImageRead %v4float %23 %uint_0 None
+         %26 = OpCompositeExtract %float %25 0
+         %28 = OpFOrdGreaterThan %bool %26 %float_0
+               OpSelectionMerge %if_merge None
+               OpBranchConditional %28 %if_true %if_merge
+    %if_true = OpLabel
+               OpStore %39 %true
+               OpStore %34 %4
+               OpBranch %33
+   %if_merge = OpLabel
+               OpStore %39 %true
+               OpStore %34 %4
+               OpBranch %33
+         %33 = OpLabel
+         %41 = OpPhi %S %4 %if_true %4 %if_merge
+               OpReturnValue %41
+               OpFunctionEnd
+)";
+  // Used to crash with a nullptr access violation when processing %41
+  SinglePassRunToBinary<DeadInsertElimPass>(disassembly, true);
 }
 
 // TODO(greg-lunarg): Add tests to verify handling of these cases:

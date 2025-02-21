@@ -57,34 +57,34 @@ using ImmediateIntTest = TextToBinaryTest;
 
 TEST_F(ImmediateIntTest, AnyWordInSimpleStatement) {
   EXPECT_THAT(CompiledInstructions("!0x00040018 %a %b %123"),
-              Eq(MakeInstruction(SpvOpTypeMatrix, {1, 2, 3})));
+              Eq(MakeInstruction(spv::Op::OpTypeMatrix, {1, 2, 3})));
   EXPECT_THAT(CompiledInstructions("!0x00040018 !1 %b %123"),
-              Eq(MakeInstruction(SpvOpTypeMatrix, {1, 1, 2})));
+              Eq(MakeInstruction(spv::Op::OpTypeMatrix, {1, 1, 2})));
   EXPECT_THAT(CompiledInstructions("%a = OpTypeMatrix !2 %123"),
-              Eq(MakeInstruction(SpvOpTypeMatrix, {1, 2, 2})));
+              Eq(MakeInstruction(spv::Op::OpTypeMatrix, {1, 2, 2})));
   EXPECT_THAT(CompiledInstructions("%a = OpTypeMatrix  %b !123"),
-              Eq(MakeInstruction(SpvOpTypeMatrix, {1, 2, 123})));
+              Eq(MakeInstruction(spv::Op::OpTypeMatrix, {1, 2, 123})));
   EXPECT_THAT(CompiledInstructions("!0x00040018 %a !2 %123"),
-              Eq(MakeInstruction(SpvOpTypeMatrix, {1, 2, 2})));
+              Eq(MakeInstruction(spv::Op::OpTypeMatrix, {1, 2, 2})));
   EXPECT_THAT(CompiledInstructions("!0x00040018 !1 %b !123"),
-              Eq(MakeInstruction(SpvOpTypeMatrix, {1, 1, 123})));
+              Eq(MakeInstruction(spv::Op::OpTypeMatrix, {1, 1, 123})));
   EXPECT_THAT(CompiledInstructions("!0x00040018 !1 !2 !123"),
-              Eq(MakeInstruction(SpvOpTypeMatrix, {1, 2, 123})));
+              Eq(MakeInstruction(spv::Op::OpTypeMatrix, {1, 2, 123})));
 }
 
 TEST_F(ImmediateIntTest, AnyWordAfterEqualsAndOpCode) {
   EXPECT_THAT(CompiledInstructions("%a = OpArrayLength !2 %c 123"),
-              Eq(MakeInstruction(SpvOpArrayLength, {2, 1, 2, 123})));
+              Eq(MakeInstruction(spv::Op::OpArrayLength, {2, 1, 2, 123})));
   EXPECT_THAT(CompiledInstructions("%a = OpArrayLength %b !3 123"),
-              Eq(MakeInstruction(SpvOpArrayLength, {1, 2, 3, 123})));
+              Eq(MakeInstruction(spv::Op::OpArrayLength, {1, 2, 3, 123})));
   EXPECT_THAT(CompiledInstructions("%a = OpArrayLength %b %c !123"),
-              Eq(MakeInstruction(SpvOpArrayLength, {1, 2, 3, 123})));
+              Eq(MakeInstruction(spv::Op::OpArrayLength, {1, 2, 3, 123})));
   EXPECT_THAT(CompiledInstructions("%a = OpArrayLength %b !3 !123"),
-              Eq(MakeInstruction(SpvOpArrayLength, {1, 2, 3, 123})));
+              Eq(MakeInstruction(spv::Op::OpArrayLength, {1, 2, 3, 123})));
   EXPECT_THAT(CompiledInstructions("%a = OpArrayLength !2 !3 123"),
-              Eq(MakeInstruction(SpvOpArrayLength, {2, 1, 3, 123})));
+              Eq(MakeInstruction(spv::Op::OpArrayLength, {2, 1, 3, 123})));
   EXPECT_THAT(CompiledInstructions("%a = OpArrayLength !2 !3 !123"),
-              Eq(MakeInstruction(SpvOpArrayLength, {2, 1, 3, 123})));
+              Eq(MakeInstruction(spv::Op::OpArrayLength, {2, 1, 3, 123})));
 }
 
 TEST_F(ImmediateIntTest, ResultIdInAssignment) {
@@ -108,8 +108,8 @@ TEST_F(ImmediateIntTest, IntegerFollowingImmediate) {
   // With !<integer>, we can (and can only) accept 32-bit number literals,
   // even when we declare the return type is 64-bit.
   EXPECT_EQ(Concatenate({
-                MakeInstruction(SpvOpTypeInt, {1, 64, 0}),
-                MakeInstruction(SpvOpConstant, {1, 2, 4294967295}),
+                MakeInstruction(spv::Op::OpTypeInt, {1, 64, 0}),
+                MakeInstruction(spv::Op::OpConstant, {1, 2, 4294967295}),
             }),
             CompiledInstructions("%i64 = OpTypeInt 64 0\n"
                                  "!0x0004002b %i64 !2 4294967295"));
@@ -136,24 +136,30 @@ TEST_F(ImmediateIntTest, IntegerFollowingImmediate) {
 }
 
 // Literal floats after !<integer> are handled correctly.
+// Insert OpNop to avoid reading the immediate value as the extra FP encoding
+// operand to OpTypeFloat.
 TEST_F(ImmediateIntTest, FloatFollowingImmediate) {
-  EXPECT_EQ(
-      CompiledInstructions("%1 = OpTypeFloat 32\n%2 = OpConstant %1 0.123"),
-      CompiledInstructions("%1 = OpTypeFloat 32\n!0x0004002b %1 !2 0.123"));
-  EXPECT_EQ(
-      CompiledInstructions("%1 = OpTypeFloat 32\n%2 = OpConstant %1 -0.5"),
-      CompiledInstructions("%1 = OpTypeFloat 32\n!0x0004002b %1 !2 -0.5"));
-  EXPECT_EQ(
-      CompiledInstructions("%1 = OpTypeFloat 32\n%2 = OpConstant %1 0.123"),
-      CompiledInstructions("%1 = OpTypeFloat 32\n!0x0004002b %1 %2 0.123"));
-  EXPECT_EQ(
-      CompiledInstructions("%1 = OpTypeFloat 32\n%2 = OpConstant  %1 -0.5"),
-      CompiledInstructions("%1 = OpTypeFloat 32\n!0x0004002b %1 %2 -0.5"));
+  EXPECT_EQ(CompiledInstructions(
+                "%1 = OpTypeFloat 32\nOpNop %2 = OpConstant %1 0.123"),
+            CompiledInstructions(
+                "%1 = OpTypeFloat 32\nOpNop !0x0004002b %1 !2 0.123"));
+  EXPECT_EQ(CompiledInstructions(
+                "%1 = OpTypeFloat 32\nOpNop %2 = OpConstant %1 -0.5"),
+            CompiledInstructions(
+                "%1 = OpTypeFloat 32\nOpNop !0x0004002b %1 !2 -0.5"));
+  EXPECT_EQ(CompiledInstructions(
+                "%1 = OpTypeFloat 32\nOpNop %2 = OpConstant %1 0.123"),
+            CompiledInstructions(
+                "%1 = OpTypeFloat 32\nOpNop !0x0004002b %1 %2 0.123"));
+  EXPECT_EQ(CompiledInstructions(
+                "%1 = OpTypeFloat 32\nOpNop %2 = OpConstant  %1 -0.5"),
+            CompiledInstructions(
+                "%1 = OpTypeFloat 32\nOpNop !0x0004002b %1 %2 -0.5"));
 
   EXPECT_EQ(Concatenate({
-                MakeInstruction(SpvOpTypeInt, {1, 64, 0}),
-                MakeInstruction(SpvOpConstant, {1, 2, 0xb, 0xa}),
-                MakeInstruction(SpvOpSwitch,
+                MakeInstruction(spv::Op::OpTypeInt, {1, 64, 0}),
+                MakeInstruction(spv::Op::OpConstant, {1, 2, 0xb, 0xa}),
+                MakeInstruction(spv::Op::OpSwitch,
                                 {2, 1234, BitwiseCast<uint32_t>(2.5f), 3}),
             }),
             CompiledInstructions("%i64 = OpTypeInt 64 0\n"
@@ -174,7 +180,7 @@ TEST_F(ImmediateIntTest, StringFollowingImmediate) {
               CompiledInstructions("OpMemberName !1 !4 \"" + name + "\""))
         << name;
     const uint16_t wordCount = static_cast<uint16_t>(4 + name.size() / 4);
-    const uint32_t firstWord = spvOpcodeMake(wordCount, SpvOpMemberName);
+    const uint32_t firstWord = spvOpcodeMake(wordCount, spv::Op::OpMemberName);
     EXPECT_EQ(original, CompiledInstructions("!" + std::to_string(firstWord) +
                                              " %10 !4 \"" + name + "\""))
         << name;
@@ -203,10 +209,10 @@ TEST_F(ImmediateIntTest, InvalidStatement) {
 
 TEST_F(ImmediateIntTest, InvalidStatementBetweenValidOnes) {
   EXPECT_THAT(Subvector(CompileSuccessfully(
-                            "%10 = OpTypeFloat 32 !5 !6 !7 OpEmitVertex"),
+                            "%10 = OpTypeInt 32 0 !5 !6 !7 OpEmitVertex"),
                         kFirstInstruction),
-              ElementsAre(spvOpcodeMake(3, SpvOpTypeFloat), 1, 32, 5, 6, 7,
-                          spvOpcodeMake(1, SpvOpEmitVertex)));
+              ElementsAre(spvOpcodeMake(4, spv::Op::OpTypeInt), 1, 32, 0, 5, 6,
+                          7, spvOpcodeMake(1, spv::Op::OpEmitVertex)));
 }
 
 TEST_F(ImmediateIntTest, NextOpcodeRecognized) {

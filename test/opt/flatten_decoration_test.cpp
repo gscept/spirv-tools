@@ -16,7 +16,6 @@
 #include <string>
 #include <vector>
 
-#include "gmock/gmock.h"
 #include "test/opt/pass_fixture.h"
 #include "test/opt/pass_utils.h"
 
@@ -43,7 +42,7 @@ OpName %Camera "Camera"
 )";
 }
 
-// Retuns types
+// Returns types
 std::string TypesAndFunctionsAssembly() {
   return
       R"(%void = OpTypeVoid
